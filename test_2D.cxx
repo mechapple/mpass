@@ -24,10 +24,19 @@
 #include <iostream>
 #include <cmath>
 #include <ctime>
+#include "cubature.h"
+
 
 double func(double x1,double x2) { 
 	double y = sqrt(1 + x1*x1 + x2*x2);
 	return 1.0/y; 
+}
+
+int f1(unsigned ndim, const double *x, void *fdata, unsigned fdim, double *fval)
+{
+    // compute the output value: note that fdim should == 1 from below
+    fval[0] = 1.0/sqrt(1 + x[0]*x[0] + x[1]*x[1]);
+    return 0; // success
 }
 
 int main(int argc, char **argv)
@@ -53,10 +62,17 @@ int main(int argc, char **argv)
 	sum *= 4.0*h*h;
 	double error = fabs(sum - 0.793359121);
 	//std::cout << "Integral = " << sum*h*h << "\n";
-	printf("Integral %.6f %.15f %.15f\n",h,sum,error);
+	printf("Integral %.6f %.15f %.15g\n",h,sum,error);
 	
 	int stop_s=clock();
 	std::cout << "time: " << (stop_s-start_s)/double(CLOCKS_PER_SEC)*1000 << std::endl;
+	
+	double xmin[2] = {0,0}, xmax[2] = {1,1}, sigma = 0.5, val[1], err[1];
+    hcubature(1, f1, &sigma, 2, xmin, xmax, 0, 0, 1e-8, ERROR_INDIVIDUAL, val, err);
+    printf("Computed integral = %0.15f +/- %.15g\n", val[0], err[0]);
+	
+	int stop_s1=clock();
+	std::cout << "time: " << (stop_s1-stop_s)/double(CLOCKS_PER_SEC)*1000 << std::endl;
 
 	return 0;
 }

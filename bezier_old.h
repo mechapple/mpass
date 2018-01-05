@@ -4,7 +4,7 @@ class Bezier {
 		int init;
 		double orig_length;
 		point p[4],pd[4],v[4],a[4],a1[4],f[4],fax[4],fbx[4],cons[4];
-		Eigen::MatrixXf mass,mass_inv,mass2;
+		Eigen::MatrixXf mass,mass_inv;
 		point r(double);
 		point dr(double);
 		point ddr(double);
@@ -59,9 +59,12 @@ point Bezier::ddr(double t) {
 }
 
 double Bezier::length() {
-	double xmin[1] = {0}, xmax[1] = {1}, val[1], err[1];
-	hcubature(1, f_Length, p, 1, xmin, xmax, 0, 0, TOL1, ERROR_INDIVIDUAL, val, err);
-	return val[0];
+	double sum = 0.0,h = 1.0/Nsimp;
+	int m[3] = {2,3,3};
+	for(int i=0; i<=Nsimp; i++) sum += normpoint(dr(i*h))*m[i%3]; //Composite Simpson's 3/8 rule
+	sum -= (normpoint(dr(0.0))+normpoint(dr(1.0))); //correct for end points
+	
+	return sum*(3*h/8);
 }
 
 double Bezier::axial_energy(){ 
@@ -75,39 +78,113 @@ double Bezier::axial_energy(){
 }
 
 void Bezier::axial_force() {
-	double xmin[1] = {0}, xmax[1] = {1}, val[12], err[12];
-	hcubature(12, f_AxForce, p, 1, xmin, xmax, 0, 0, TOL1, ERROR_INDIVIDUAL, val, err);
-	//printf("fax_curbature\n");
-	//for(int i=0;i<3;i++) {for(int j=0;j<4;j++) printf("%lf ",val[i*4+j]); printf("\n");}
-		
-	double factor = -1.0*EA*(length()-orig_length);
-	for(int i=0;i<3;i++) for(int j=0;j<4;j++) val[i*4+j] *= factor;
+	double sum[3][4]={0},h = 1.0/Nsimp;
+	int m[3] = {2,3,3};
+	for(int i=0; i<=Nsimp; i++) {
+		double t = i*h,ds = normpoint(dr(t)); point dR = dr(t);
+		for(int j=0;j<4;j++) sum[0][j] += m[i%3]*(1.0/ds)*dR.x*dB[j](t);
+		for(int j=0;j<4;j++) sum[1][j] += m[i%3]*(1.0/ds)*dR.y*dB[j](t);
+		for(int j=0;j<4;j++) sum[2][j] += m[i%3]*(1.0/ds)*dR.z*dB[j](t);
+	}
+	for(double t=0; t<=1.0; t+=1.0) { //correct for end points 0 and 1
+		double ds = normpoint(dr(t)); point dR = dr(t);
+		for(int j=0;j<4;j++) sum[0][j] -= (1.0/ds)*dR.x*dB[j](t);
+		for(int j=0;j<4;j++) sum[1][j] -= (1.0/ds)*dR.y*dB[j](t);
+		for(int j=0;j<4;j++) sum[2][j] -= (1.0/ds)*dR.z*dB[j](t);
+	}
 	
-	fax[0].x = val[0]; fax[0].y = val[4]; fax[0].z = val[8];
-	fax[1].x = val[1]; fax[1].y = val[5]; fax[1].z = val[9];
-	fax[2].x = val[2]; fax[2].y = val[6]; fax[2].z = val[10];
-	fax[3].x = val[3]; fax[3].y = val[7]; fax[3].z = val[11];
+	double factor = -1.0*EA*(length()-orig_length)*(3*h/8);
+	for(int i=0;i<3;i++) for(int j=0;j<4;j++) sum[i][j] *= factor;
+
+	//printf("fax\n");
+	//for(int i=0;i<3;i++) {for(int j=0;j<4;j++) printf("%lf ",sum[i][j]); printf("\n");}
+	
+	fax[0].x = sum[0][0]; fax[0].y = sum[1][0]; fax[0].z = sum[2][0];
+	fax[1].x = sum[0][1]; fax[1].y = sum[1][1]; fax[1].z = sum[2][1];
+	fax[2].x = sum[0][2]; fax[2].y = sum[1][2]; fax[2].z = sum[2][2];
+	fax[3].x = sum[0][3]; fax[3].y = sum[1][3]; fax[3].z = sum[2][3];
 }
 
 double Bezier::bending_energy() { 
-	double xmin[1] = {0}, xmax[1] = {1}, val[1], err[1];
-	hcubature(1, f_BeEnergy, p, 1, xmin, xmax, 0, 0, TOL1, ERROR_INDIVIDUAL, val, err);
-	return val[0]*0.5*EI;
+	double sum = 0.0,h = 1.0/Nsimp;
+	int m[3] = {2,3,3};
+	for(int i=0; i<=Nsimp; i++) {
+		double t = i*h;
+		double num = pow((ddr(t).z*dr(t).y - ddr(t).y*dr(t).z),2) + pow((ddr(t).x*dr(t).z - ddr(t).z*dr(t).x),2) + pow((ddr(t).y*dr(t).x - ddr(t).x*dr(t).y),2);
+		double den = pow(normpoint(dr(t)),5);
+		sum += m[i%3]*num/den;  //Composite Simpson's 3/8 rule
+	}
+	
+	for(double t=0; t<=1.0; t+=1.0) { //correct for end points 0 and 1
+		double num = pow((ddr(t).z*dr(t).y - ddr(t).y*dr(t).z),2) + pow((ddr(t).x*dr(t).z - ddr(t).z*dr(t).x),2) + pow((ddr(t).y*dr(t).x - ddr(t).x*dr(t).y),2);
+		double den = pow(normpoint(dr(t)),5);
+		sum -= num/den;
+	}
+	return sum*(3*h/8)*0.5*EI;
 }
 
 void Bezier::bending_force() {
-	double xmin[1] = {0}, xmax[1] = {1}, val[12], err[12];
-	hcubature(12, f_BeForce, p, 1, xmin, xmax, 0, 0, TOL1, ERROR_INDIVIDUAL, val, err);
-	//printf("fbx_curbature\n");
-	//for(int i=0;i<3;i++) {for(int j=0;j<4;j++) printf("%.15f ",val[i*4+j]); printf("\n");}
 	
-	double factor = -0.5*EI;
-	for(int i=0;i<3;i++) for(int j=0;j<4;j++) val[i*4+j] *= factor;
+	double sum[3][4]={0},h = 1.0/Nsimp;
+	int m[3] = {2,3,3};
+	for(int i=0; i<=Nsimp; i++) { //Composite Simpson's 3/8 rule
+		double t = i*h; point dR = dr(t), ddR = ddr(t);
+		double num = pow((ddR.z*dR.y - ddR.y*dR.z),2) + pow((ddR.x*dR.z - ddR.z*dR.x),2) + pow((ddR.y*dR.x - ddR.x*dR.y),2);
+		double Nm[3] = {(ddR.z*dR.y - ddR.y*dR.z), (ddR.x*dR.z - ddR.z*dR.x), (ddR.y*dR.x - ddR.x*dR.y)};
+		double ds = normpoint(dR); 
+		for(int j=0;j<4;j++) {
+			double dNdxj = 2*Nm[1]*(ddB[j](t)*dR.z - ddR.z*dB[j](t)) + 2*Nm[2]*(ddR.y*dB[j](t) - ddB[j](t)*dR.y);
+			double dsdxj = (dR.x/ds)*dB[j](t);
+			sum[0][j] += m[i%3]*(ds*dNdxj - 5*num*dsdxj)/pow(ds,6);
+		}
+		
+		for(int j=0;j<4;j++) {
+			double dNdyj = 2*Nm[0]*(ddR.z*dB[j](t) - ddB[j](t)*dR.z) + 2*Nm[2]*(ddB[j](t)*dR.x - ddR.x*dB[j](t));
+			double dsdyj = (dR.y/ds)*dB[j](t);
+			sum[1][j] += m[i%3]*(ds*dNdyj - 5*num*dsdyj)/pow(ds,6);
+		}
+		
+		for(int j=0;j<4;j++) {
+			double dNdzj = 2*Nm[0]*(ddB[j](t)*dR.y - ddR.y*dB[j](t)) + 2*Nm[1]*(ddR.x*dB[j](t) - ddB[j](t)*dR.x);
+			double dsdzj = (dR.z/ds)*dB[j](t);
+			sum[2][j] += m[i%3]*(ds*dNdzj - 5*num*dsdzj)/pow(ds,6);
+		}
+	}
 	
-	fbx[0].x = val[0]; fbx[0].y = val[4]; fbx[0].z = val[8];
-	fbx[1].x = val[1]; fbx[1].y = val[5]; fbx[1].z = val[9];
-	fbx[2].x = val[2]; fbx[2].y = val[6]; fbx[2].z = val[10];
-	fbx[3].x = val[3]; fbx[3].y = val[7]; fbx[3].z = val[11];
+	for(double t=0; t<=1.0; t+=1.0) { //correct for end points 0 and 1
+		point dR = dr(t), ddR = ddr(t);
+		double num = pow((ddR.z*dR.y - ddR.y*dR.z),2) + pow((ddR.x*dR.z - ddR.z*dR.x),2) + pow((ddR.y*dR.x - ddR.x*dR.y),2);
+		double Nm[3] = {(ddR.z*dR.y - ddR.y*dR.z), (ddR.x*dR.z - ddR.z*dR.x), (ddR.y*dR.x - ddR.x*dR.y)};
+		double ds = normpoint(dR); 
+		for(int j=0;j<4;j++) {
+			double dNdxj = 2*Nm[1]*(ddB[j](t)*dR.z - ddR.z*dB[j](t)) + 2*Nm[2]*(ddR.y*dB[j](t) - ddB[j](t)*dR.y);
+			double dsdxj = (dR.x/ds)*dB[j](t);
+			sum[0][j] -= 1.0*(ds*dNdxj - 5*num*dsdxj)/pow(ds,6);
+		}
+		
+		for(int j=0;j<4;j++) {
+			double dNdyj = 2*Nm[0]*(ddR.z*dB[j](t) - ddB[j](t)*dR.z) + 2*Nm[2]*(ddB[j](t)*dR.x - ddR.x*dB[j](t));
+			double dsdyj = (dR.y/ds)*dB[j](t);
+			sum[1][j] -= 1.0*(ds*dNdyj - 5*num*dsdyj)/pow(ds,6);
+		}
+		
+		for(int j=0;j<4;j++) {
+			double dNdzj = 2*Nm[0]*(ddB[j](t)*dR.y - ddR.y*dB[j](t)) + 2*Nm[1]*(ddR.x*dB[j](t) - ddB[j](t)*dR.x);
+			double dsdzj = (dR.z/ds)*dB[j](t);
+			sum[2][j] -= 1.0*(ds*dNdzj - 5*num*dsdzj)/pow(ds,6);
+		}
+	}
+	
+	double factor = -0.5*EI*(3*h/8);
+	for(int i=0;i<3;i++) for(int j=0;j<4;j++) sum[i][j] *= factor;
+	
+	//printf("fbx\n");
+	//for(int i=0;i<3;i++) {for(int j=0;j<4;j++) printf("%lf ",sum[i][j]); printf("\n");}
+	
+	fbx[0].x = sum[0][0]; fbx[0].y = sum[1][0]; fbx[0].z = sum[2][0];
+	fbx[1].x = sum[0][1]; fbx[1].y = sum[1][1]; fbx[1].z = sum[2][1];
+	fbx[2].x = sum[0][2]; fbx[2].y = sum[1][2]; fbx[2].z = sum[2][2];
+	fbx[3].x = sum[0][3]; fbx[3].y = sum[1][3]; fbx[3].z = sum[2][3];
 }
 
 void Bezier::intra_force() {
@@ -125,13 +202,33 @@ double Bezier::intra_energy() {
 
 void Bezier::compute_mass() {
 	mass = Eigen::MatrixXf::Zero(4,4);
-	double xmin[1] = {0}, xmax[1] = {1}, val[16], err[16];
-	hcubature(16, f_Mass, p, 1, xmin, xmax, 0, 0, TOL1, ERROR_INDIVIDUAL, val, err);
-	for(int j=0;j<4;j++) for(int k=0;k<4;k++) mass(j,k) = rho*val[j*4+k];
+	double sum = 0.0,h = 1.0/Nsimp;
+	int m[3] = {2,3,3};
+	//for(int j=0;j<4;j++) printpoint(p[j]);
+	for(int i=0; i<=Nsimp; i++) {
+		double t = i*h; point dR = dr(t);
+		double ds = normpoint(dR);
+		double Bt[4]; for(int j=0;j<4;j++) Bt[j] = B[j](t);
+		for(int j=0;j<4;j++) for(int k=0;k<4;k++) {
+			mass(j,k) += m[i%3]*ds*Bt[j]*Bt[k];
+		}
+	}
+	
+	for(double t=0; t<=1.0; t+=1.0) { //correct for end points 0 and 1
+		point dR = dr(t); double ds = normpoint(dR);
+		double Bt[4]; for(int j=0;j<4;j++) Bt[j] = B[j](t);
+		for(int j=0;j<4;j++) for(int k=0;k<4;k++) {
+			mass(j,k) -= ds*Bt[j]*Bt[k];
+		}
+	}
+	
+	double factor = rho*(3*h/8);
+	for(int j=0;j<4;j++) for(int k=0;k<4;k++) mass(j,k) *= factor;
 	
 	mass_inv = mass.inverse();
-	//std::cout << "Here is the curbature mass matrix :\n" << mass << std::endl;
+	//std::cout << "Here is the mass matrix :\n" << mass << std::endl;
 	//std::cout << "Here is the inverse mass matrix :\n" << mass_inv << std::endl;
+	
 }
 
 void Bezier::display_curve(int time, FILE *fcom) {

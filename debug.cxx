@@ -30,12 +30,14 @@
 #include <stdlib.h>
 #include <cmath>
 #include <vector>
+#include <cubature.h>
 #include <bernstein.h>
 #include <eigen2/Eigen/Dense>
 
+#include <lj.h>
 #include <point.h>
 #include <bezier.h>
-#include <lj.h>
+
 #include <firemin.h>
 
 int main(int argc, char **argv)
@@ -108,11 +110,14 @@ int main(int argc, char **argv)
 	//b[1].p[3].x = 1.0*fac; b[1].p[3].y = 0.0; b[1].p[3].z = sep;
 	
 	
-		
+	
 	printf("Bezier length %.15f %.15f\n",b[0].length(),b[1].length());
 	printf("Bezier axial energy %.15f\n",b[0].axial_energy()+b[1].axial_energy());
 	printf("Bezier bending energy %.15f\n",b[0].bending_energy()+b[1].bending_energy());
 	printf("Bezier inter energy %.15f\n",inter_energy(b[0],b[1]));
+	
+	b[0].intra_force();
+	b[0].compute_mass();
 	
 	vecBez bz(2); bz = inter_force(b[0],b[1]);
 	

@@ -29,12 +29,13 @@
 #include <stdlib.h>
 #include <cmath>
 #include <vector>
+#include <cubature.h>
 #include <bernstein.h>
 #include <eigen2/Eigen/Dense>
 
+#include <lj.h>
 #include <point.h>
 #include <bezier.h>
-#include <lj.h>
 #include <firemin.h>
 
 int main(int argc, char **argv)

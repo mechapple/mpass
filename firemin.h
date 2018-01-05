@@ -1,4 +1,4 @@
-#define Nsimp2D 3e2
+#define Nsimp2D 1e3
 #define xscale 50.0
 
 typedef std::vector<Bezier> vecBez;
@@ -34,7 +34,7 @@ double inter_energy(Bezier b1,Bezier b2) {
 	
 	int m[2][2] = {{4,8},{8,16}};
 	
-	double tmin = 0.7,tmax=1.0;
+	double tmin = 0.9,tmax=1.0;
 	double h = (tmax-tmin)/(Nsim), sum = 0.0,x,y;
 	
 	for(int i=0;i<=Nsim;i++) 
@@ -42,6 +42,7 @@ double inter_energy(Bezier b1,Bezier b2) {
 			double t1 = tmin+i*h,t2 = tmin+j*h; point R1 = b1.r(t1), R2 = b2.r(t2);
 			double d = sqrt(pow(R1.x-R2.x,2)+pow(R1.y-R2.y,2)+pow(R1.z-R2.z,2));
 			sum += m[i%2][j%2]*pair_energy(d)*normpoint(b1.dr(t1))*normpoint(b2.dr(t2));
+			printf("\n value %.15f %.15f %.15f %.15f %.15f",t1,t2,d,pair_energy(d),pair_energy(d)*normpoint(b1.dr(t1))*normpoint(b2.dr(t2)));
 	}
 	
 	int n[2] = {2,4};
@@ -66,8 +67,19 @@ double inter_energy(Bezier b1,Bezier b2) {
 		double d = sqrt(pow(R1.x-R2.x,2)+pow(R1.y-R2.y,2)+pow(R1.z-R2.z,2));
 		sum += pair_energy(d)*normpoint(b1.dr(t1))*normpoint(b2.dr(t2));
 	}
-	
 	sum *= h*h/9.0;
+	
+	//printpoint(b2.p[3]);
+	printf("\nOrig %.15f \n", sum);
+		
+	double xmin[2] = {tmin,tmin}, xmax[2] = {tmax,tmax}, val[1], err[1];
+	point rp[8] = {b1.p[0],b1.p[1],b1.p[2],b1.p[3],b2.p[0],b2.p[1],b2.p[2],b2.p[3]};
+	
+	//printpoint(rp[7]);
+	//hcubature(1, f_InterEnergy, rp, 2, xmin, xmax, 0, 0, TOL2, ERROR_INDIVIDUAL, val, err);
+	printf("Computed integral = %0.15f +/- %.15g\n", val[0], err[0]);
+	
+	
 	return sum;
 }
 
