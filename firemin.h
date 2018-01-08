@@ -30,202 +30,31 @@ void display_all_cps(vecBez bk,int time,FILE *fcom) {
 }
 
 double inter_energy(Bezier b1,Bezier b2) {
-	int Nsim = Nsimp2D;
-	
-	int m[2][2] = {{4,8},{8,16}};
-	
-	double tmin = 0.9,tmax=1.0;
-	double h = (tmax-tmin)/(Nsim), sum = 0.0,x,y;
-	
-	for(int i=0;i<=Nsim;i++) 
-		for(int j=0;j<=Nsim;j++) {
-			double t1 = tmin+i*h,t2 = tmin+j*h; point R1 = b1.r(t1), R2 = b2.r(t2);
-			double d = sqrt(pow(R1.x-R2.x,2)+pow(R1.y-R2.y,2)+pow(R1.z-R2.z,2));
-			sum += m[i%2][j%2]*pair_energy(d)*normpoint(b1.dr(t1))*normpoint(b2.dr(t2));
-			printf("\n value %.15f %.15f %.15f %.15f %.15f",t1,t2,d,pair_energy(d),pair_energy(d)*normpoint(b1.dr(t1))*normpoint(b2.dr(t2)));
-	}
-	
-	int n[2] = {2,4};
-	for(int i=0;i<=Nsim;i++) 
-		for(double t=tmin;t<=tmax;t+=(tmax-tmin)) {
-			double t1 = tmin+i*h; 
-			
-			point R1 = b1.r(t1), R2 = b2.r(t);
-			double d = sqrt(pow(R1.x-R2.x,2)+pow(R1.y-R2.y,2)+pow(R1.z-R2.z,2));
-			sum -= n[i%2]*pair_energy(d)*normpoint(b1.dr(t1))*normpoint(b2.dr(t));
-			
-			R1 = b1.r(t); R2 = b2.r(t1);
-			d = sqrt(pow(R1.x-R2.x,2)+pow(R1.y-R2.y,2)+pow(R1.z-R2.z,2));
-			sum -= n[i%2]*pair_energy(d)*normpoint(b1.dr(t))*normpoint(b2.dr(t1));
-			
-			//sum -= n[i%2]*func(i*h,t);
-			//sum -= n[i%2]*func(t,i*h);
-	}
-	
-	for(double t1=tmin;t1<=tmax;t1+=(tmax-tmin)) for(double t2=tmin;t2<=tmax;t2+=(tmax-tmin)) {
-		point R1 = b1.r(t1), R2 = b2.r(t2);
-		double d = sqrt(pow(R1.x-R2.x,2)+pow(R1.y-R2.y,2)+pow(R1.z-R2.z,2));
-		sum += pair_energy(d)*normpoint(b1.dr(t1))*normpoint(b2.dr(t2));
-	}
-	sum *= h*h/9.0;
-	
-	//printpoint(b2.p[3]);
-	printf("\nOrig %.15f \n", sum);
-		
+	double tmin = 0.0,tmax=1.0;
 	double xmin[2] = {tmin,tmin}, xmax[2] = {tmax,tmax}, val[1], err[1];
 	point rp[8] = {b1.p[0],b1.p[1],b1.p[2],b1.p[3],b2.p[0],b2.p[1],b2.p[2],b2.p[3]};
 	
-	//printpoint(rp[7]);
-	//hcubature(1, f_InterEnergy, rp, 2, xmin, xmax, 0, 0, TOL2, ERROR_INDIVIDUAL, val, err);
-	printf("Computed integral = %0.15f +/- %.15g\n", val[0], err[0]);
-	
-	
-	return sum;
+	pcubature(1, f_InterEnergy, rp, 2, xmin, xmax, 0, 0, TOL2, ERROR_INDIVIDUAL, val, err);
+	//printf("Computed integral = %0.15f +/- %.15g\n", val[0], err[0]);
+	return val[0];
 }
 
 vecBez inter_force(Bezier b1,Bezier b2) {
 	vecBez bz(2);
-	int Nsim = Nsimp2D;
+	double tmin = 0.0,tmax=1.0;
+	double xmin[2] = {tmin,tmin}, xmax[2] = {tmax,tmax}, val[24], err[24];
 	
-	double tmin = 0.7,tmax=1.0;
-	double h = (tmax-tmin)/(Nsim), sum = 0.0,x,y;
-	int m[2][2] = {{4,8},{8,16}};
-	point f[2][4];
-	for(int i=0;i<2;i++) for(int j=0;j<4;j++) { f[i][j].x = 0.0; f[i][j].y = 0.0; f[i][j].z = 0.0; }
+	point rp[8] = {b1.p[0],b1.p[1],b1.p[2],b1.p[3],b2.p[0],b2.p[1],b2.p[2],b2.p[3]};
+	pcubature(24, f_InterForce, rp, 2, xmin, xmax, 0, 0, TOL3, ERROR_INDIVIDUAL, val, err);
+	//printf("Computed integral = %0.15f +/- %.15g\n", val[0], err[0]);
 	
-	for(int i=0;i<=Nsim;i++) 
-		for(int j=0;j<=Nsim;j++) {
-			double t1 = tmin+i*h,t2 = tmin+j*h; 
-			point R1 = b1.r(t1), R2 = b2.r(t2);
-			point dR1 = b1.dr(t1), dR2 = b2.dr(t2);
-			double d = sqrt(pow(R1.x-R2.x,2)+pow(R1.y-R2.y,2)+pow(R1.z-R2.z,2));
-			
-			if(d<=rcut) {
-				
-				double ds[2] = { normpoint(dR1),normpoint(dR2) };
-				double pg = pair_gradient(d), pe = pair_energy(d);
-				double Bt[4][2] = { {B[0](t1),B[0](t2)}, {B[1](t1),B[1](t2)}, {B[2](t1),B[2](t2)}, {B[3](t1),B[3](t2)} };
-				double dBt[4][2] = { {dB[0](t1),dB[0](t2)}, {dB[1](t1),dB[1](t2)}, {dB[2](t1),dB[2](t2)}, {dB[3](t1),dB[3](t2)} };
-				
-				for(int k=0;k<4;k++) {
-					
-					f[0][k].x += m[i%2][j%2]*(ds[0]*ds[1]*pg*(R1.x-R2.x)*Bt[k][0]/d  +  pe*dR1.x*dBt[k][0]*ds[1]/ds[0]);
-					f[0][k].y += m[i%2][j%2]*(ds[0]*ds[1]*pg*(R1.y-R2.y)*Bt[k][0]/d  +  pe*dR1.y*dBt[k][0]*ds[1]/ds[0]);
-					f[0][k].z += m[i%2][j%2]*(ds[0]*ds[1]*pg*(R1.z-R2.z)*Bt[k][0]/d  +  pe*dR1.z*dBt[k][0]*ds[1]/ds[0]);
-					
-					f[1][k].x += m[i%2][j%2]*(ds[0]*ds[1]*pg*(R2.x-R1.x)*Bt[k][1]/d  +  pe*dR2.x*dBt[k][1]*ds[0]/ds[1]);
-					f[1][k].y += m[i%2][j%2]*(ds[0]*ds[1]*pg*(R2.y-R1.y)*Bt[k][1]/d  +  pe*dR2.y*dBt[k][1]*ds[0]/ds[1]);
-					f[1][k].z += m[i%2][j%2]*(ds[0]*ds[1]*pg*(R2.z-R1.z)*Bt[k][1]/d  +  pe*dR2.z*dBt[k][1]*ds[0]/ds[1]);
-				}
-			}
-			
-			//printf("(%lf,%lf) (%lf,%lf) %lf %lf %lf %lf\n",R1.x,R1.y,R2.x,R2.y,t1,t2,d,pair_gradient(d));
-	}
-	
-	int n[2] = {2,4};
-	for(int i=0;i<=Nsim;i++) 
-		for(double t=tmin;t<=tmax;t+=(tmax-tmin)) {
-			 
-			{	double t1 = tmin+i*h, t2 = t;
-				
-				point R1 = b1.r(t1), R2 = b2.r(t2);
-				point dR1 = b1.dr(t1), dR2 = b2.dr(t2);
-				double d = sqrt(pow(R1.x-R2.x,2)+pow(R1.y-R2.y,2)+pow(R1.z-R2.z,2));
-				
-				if(d<=rcut) {
-					
-					double ds[2] = { normpoint(dR1),normpoint(dR2) };
-					double pg = pair_gradient(d), pe = pair_energy(d);
-					double Bt[4][2] = { {B[0](t1),B[0](t2)}, {B[1](t1),B[1](t2)}, {B[2](t1),B[2](t2)}, {B[3](t1),B[3](t2)} };
-					double dBt[4][2] = { {dB[0](t1),dB[0](t2)}, {dB[1](t1),dB[1](t2)}, {dB[2](t1),dB[2](t2)}, {dB[3](t1),dB[3](t2)} };
-				
-					for(int k=0;k<4;k++) {
-						
-						f[0][k].x -= n[i%2]*(ds[0]*ds[1]*pg*(R1.x-R2.x)*Bt[k][0]/d  +  pe*dR1.x*dBt[k][0]*ds[1]/ds[0]);
-						f[0][k].y -= n[i%2]*(ds[0]*ds[1]*pg*(R1.y-R2.y)*Bt[k][0]/d  +  pe*dR1.y*dBt[k][0]*ds[1]/ds[0]);
-						f[0][k].z -= n[i%2]*(ds[0]*ds[1]*pg*(R1.z-R2.z)*Bt[k][0]/d  +  pe*dR1.z*dBt[k][0]*ds[1]/ds[0]);
-						
-						f[1][k].x -= n[i%2]*(ds[0]*ds[1]*pg*(R2.x-R1.x)*Bt[k][1]/d  +  pe*dR2.x*dBt[k][1]*ds[0]/ds[1]);
-						f[1][k].y -= n[i%2]*(ds[0]*ds[1]*pg*(R2.y-R1.y)*Bt[k][1]/d  +  pe*dR2.y*dBt[k][1]*ds[0]/ds[1]);
-						f[1][k].z -= n[i%2]*(ds[0]*ds[1]*pg*(R2.z-R1.z)*Bt[k][1]/d  +  pe*dR2.z*dBt[k][1]*ds[0]/ds[1]);
-					}
-				}
-			}
-			
-			{	double t1 = t, t2 = tmin+i*h;
-				
-				point R1 = b1.r(t1), R2 = b2.r(t2);
-				point dR1 = b1.dr(t1), dR2 = b2.dr(t2);
-				double d = sqrt(pow(R1.x-R2.x,2)+pow(R1.y-R2.y,2)+pow(R1.z-R2.z,2));
-				
-				if(d<=rcut) {
-					
-					double ds[2] = { normpoint(dR1),normpoint(dR2) };
-					double pg = pair_gradient(d), pe = pair_energy(d);
-					double Bt[4][2] = { {B[0](t1),B[0](t2)}, {B[1](t1),B[1](t2)}, {B[2](t1),B[2](t2)}, {B[3](t1),B[3](t2)} };
-					double dBt[4][2] = { {dB[0](t1),dB[0](t2)}, {dB[1](t1),dB[1](t2)}, {dB[2](t1),dB[2](t2)}, {dB[3](t1),dB[3](t2)} };
-					
-					for(int k=0;k<4;k++) {
-						
-						f[0][k].x -= n[i%2]*(ds[0]*ds[1]*pg*(R1.x-R2.x)*Bt[k][0]/d  +  pe*dR1.x*dBt[k][0]*ds[1]/ds[0]);
-						f[0][k].y -= n[i%2]*(ds[0]*ds[1]*pg*(R1.y-R2.y)*Bt[k][0]/d  +  pe*dR1.y*dBt[k][0]*ds[1]/ds[0]);
-						f[0][k].z -= n[i%2]*(ds[0]*ds[1]*pg*(R1.z-R2.z)*Bt[k][0]/d  +  pe*dR1.z*dBt[k][0]*ds[1]/ds[0]);
-						
-						f[1][k].x -= n[i%2]*(ds[0]*ds[1]*pg*(R2.x-R1.x)*Bt[k][1]/d  +  pe*dR2.x*dBt[k][1]*ds[0]/ds[1]);
-						f[1][k].y -= n[i%2]*(ds[0]*ds[1]*pg*(R2.y-R1.y)*Bt[k][1]/d  +  pe*dR2.y*dBt[k][1]*ds[0]/ds[1]);
-						f[1][k].z -= n[i%2]*(ds[0]*ds[1]*pg*(R2.z-R1.z)*Bt[k][1]/d  +  pe*dR2.z*dBt[k][1]*ds[0]/ds[1]);
-					}
-				}
-			}
-	}
-	
-	for(double t1=tmin;t1<=tmax;t1+=(tmax-tmin)) for(double t2=tmin;t2<=tmax;t2+=(tmax-tmin)) {
-		point R1 = b1.r(t1), R2 = b2.r(t2);
-		point dR1 = b1.dr(t1), dR2 = b2.dr(t2);
-		double d = sqrt(pow(R1.x-R2.x,2)+pow(R1.y-R2.y,2)+pow(R1.z-R2.z,2));
-		
-		double ds[2] = { normpoint(dR1),normpoint(dR2) };
-		double pg = pair_gradient(d), pe = pair_energy(d);
-		double Bt[4][2] = { {B[0](t1),B[0](t2)}, {B[1](t1),B[1](t2)}, {B[2](t1),B[2](t2)}, {B[3](t1),B[3](t2)} };
-		double dBt[4][2] = { {dB[0](t1),dB[0](t2)}, {dB[1](t1),dB[1](t2)}, {dB[2](t1),dB[2](t2)}, {dB[3](t1),dB[3](t2)} };
-		
-		if(d<=rcut) {
-			
-			double ds[2] = { normpoint(dR1),normpoint(dR2) };
-			double pg = pair_gradient(d), pe = pair_energy(d);
-			double Bt[4][2] = { {B[0](t1),B[0](t2)}, {B[1](t1),B[1](t2)}, {B[2](t1),B[2](t2)}, {B[3](t1),B[3](t2)} };
-			double dBt[4][2] = { {dB[0](t1),dB[0](t2)}, {dB[1](t1),dB[1](t2)}, {dB[2](t1),dB[2](t2)}, {dB[3](t1),dB[3](t2)} };
-				
-			for(int k=0;k<4;k++) {
-				
-				f[0][k].x += 1.0*(ds[0]*ds[1]*pg*(R1.x-R2.x)*Bt[k][0]/d  +  pe*dR1.x*dBt[k][0]*ds[1]/ds[0]);
-				f[0][k].y += 1.0*(ds[0]*ds[1]*pg*(R1.y-R2.y)*Bt[k][0]/d  +  pe*dR1.y*dBt[k][0]*ds[1]/ds[0]);
-				f[0][k].z += 1.0*(ds[0]*ds[1]*pg*(R1.z-R2.z)*Bt[k][0]/d  +  pe*dR1.z*dBt[k][0]*ds[1]/ds[0]);
-				
-				f[1][k].x += 1.0*(ds[0]*ds[1]*pg*(R2.x-R1.x)*Bt[k][1]/d  +  pe*dR2.x*dBt[k][1]*ds[0]/ds[1]);
-				f[1][k].y += 1.0*(ds[0]*ds[1]*pg*(R2.y-R1.y)*Bt[k][1]/d  +  pe*dR2.y*dBt[k][1]*ds[0]/ds[1]);
-				f[1][k].z += 1.0*(ds[0]*ds[1]*pg*(R2.z-R1.z)*Bt[k][1]/d  +  pe*dR2.z*dBt[k][1]*ds[0]/ds[1]);
-			}
-		}
-	}
-	
-	//printf("Printing orig forces\n");
-	//for(int k=0;k<4;k++) printf("%lf %lf %lf\n",b1.f[k].x,b1.f[k].y,b1.f[k].z);
-	//for(int k=0;k<4;k++) printf("%lf %lf %lf\n",b2.f[k].x,b2.f[k].y,b2.f[k].z);
-		
-	double factor = -1.0*h*h/9.0;
-	//printf("Printing inter forces\n");
-	//for(int k=0;k<4;k++) printf("%lf %lf %lf\n",f[0][k].x*factor,f[0][k].y*factor,f[0][k].z*factor);
-	//for(int k=0;k<4;k++) printf("%lf %lf %lf\n",f[1][k].x*factor,f[1][k].y*factor,f[1][k].z*factor);
-		
-	//for(int k=0;k<4;k++) {
-		//b1.f[k].x += f[0][k].x*factor;	b1.f[k].y += f[0][k].y*factor; b1.f[k].z += f[0][k].z*factor;
-		//b2.f[k].x += f[1][k].x*factor;	b2.f[k].y += f[1][k].y*factor; b2.f[k].z += f[1][k].z*factor;
-	//}
-	
+	//printf("Printing inter cubature forces\n");
+	//for(int k=0;k<4;k++) printf("%.15f %.15f %.15f\n",val[3*k],val[3*k+1],val[3*k+2]);
+	//for(int k=0;k<4;k++) printf("%.15f %.15f %.15f\n",val[3*k+12],val[3*k+13],val[3*k+14]);
+
 	for(int k=0;k<4;k++) {
-		bz[0].f[k].x = f[0][k].x*factor;	bz[0].f[k].y = f[0][k].y*factor; bz[0].f[k].z = f[0][k].z*factor;
-		bz[1].f[k].x = f[1][k].x*factor;	bz[1].f[k].y = f[1][k].y*factor; bz[1].f[k].z = f[1][k].z*factor;
+		bz[0].f[k].x = val[3*k];	bz[0].f[k].y = val[3*k+1]; bz[0].f[k].z = val[3*k+2];
+		bz[1].f[k].x = val[3*k+12];	bz[1].f[k].y = val[3*k+13]; bz[1].f[k].z = val[3*k+14];
 	}
 	
 	//printf("Printing modf. forces\n");

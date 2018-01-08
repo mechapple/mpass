@@ -9,7 +9,8 @@
 #define rho 1.0
 #define Nbez 2
 #define TOL1 1e-6
-#define TOL2 1e-2
+#define TOL2 1e-6
+#define TOL3 1e-3
 
 struct point {
 	double x,y,z;
@@ -137,6 +138,60 @@ int f_InterEnergy(unsigned ndim, const double *t, void *fdata, unsigned fdim, do
 	fval[0] = pair_energy(d)*normpoint(dR1)*normpoint(dR2);
 	
 	//fval[0] = pair_energy(d);
+	//printf("\n value %.15f %.15f %.15f %.15f %.15f",t[0],t[1],d,pair_energy(d),fval[0]);
+	return 0; // success
+}
+
+int f_InterForce(unsigned ndim, const double *t, void *fdata, unsigned fdim, double *fval)
+{
+	point p1[4] = {((point *) fdata)[0],((point *) fdata)[1],((point *) fdata)[2],((point *) fdata)[3]};
+	point p2[4] = {((point *) fdata)[4],((point *) fdata)[5],((point *) fdata)[6],((point *) fdata)[7]};
+	
+	//printpoint(p2[3]);
+	
+	point R1 = S(p1,t[0]), R2 = S(p2,t[1]);
+	point dR1 = dS(p1,t[0]), dR2 = dS(p2,t[1]);
+	double d = sqrt(pow(R1.x-R2.x,2)+pow(R1.y-R2.y,2)+pow(R1.z-R2.z,2));
+	
+	//double Bt[4][2] = { {B[0](t[0]),B[0](t[1])}, {B[1](t[0]),B[1](t[1])}, {B[2](t[0]),B[2](t[1])}, {B[3](t[0]),B[3](t[1])} };
+	//double dBt[4][2] = { {dB[0](t[0]),dB[0](t[1])}, {dB[1](t[0]),dB[1](t[1])}, {dB[2](t[0]),dB[2](t[1])}, {dB[3](t[0]),dB[3](t[1])} };
+	
+	//for(int k=0;k<4;k++) {
+		//fval[3*k] = (ds[0]*ds[1]*pg*(R1.x-R2.x)*Bt[k][0]/d  +  pe*dR1.x*dBt[k][0]*ds[1]/ds[0]);
+		//fval[3*k+1] = (ds[0]*ds[1]*pg*(R1.y-R2.y)*Bt[k][0]/d  +  pe*dR1.y*dBt[k][0]*ds[1]/ds[0]);
+		//fval[3*k+2] = (ds[0]*ds[1]*pg*(R1.z-R2.z)*Bt[k][0]/d  +  pe*dR1.z*dBt[k][0]*ds[1]/ds[0]);
+		
+		//fval[3*k+12] = (ds[0]*ds[1]*pg*(R2.x-R1.x)*Bt[k][1]/d  +  pe*dR2.x*dBt[k][1]*ds[0]/ds[1]);
+		//fval[3*k+13] = (ds[0]*ds[1]*pg*(R2.y-R1.y)*Bt[k][1]/d  +  pe*dR2.y*dBt[k][1]*ds[0]/ds[1]);
+		//fval[3*k+14] = (ds[0]*ds[1]*pg*(R2.z-R1.z)*Bt[k][1]/d  +  pe*dR2.z*dBt[k][1]*ds[0]/ds[1]);
+	//}
+	if(d<=rcut) {
+		double ds[2] = { normpoint(dR1),normpoint(dR2) };
+		double pg = pair_gradient(d), pe = pair_energy(d);
+			
+		for(int k=0;k<4;k++) {
+			fval[3*k] = -(ds[0]*ds[1]*pg*(R1.x-R2.x)*B[k](t[0])/d  +  pe*dR1.x*dB[k](t[0])*ds[1]/ds[0]);
+			fval[3*k+1] = -(ds[0]*ds[1]*pg*(R1.y-R2.y)*B[k](t[0])/d  +  pe*dR1.y*dB[k](t[0])*ds[1]/ds[0]);
+			fval[3*k+2] = -(ds[0]*ds[1]*pg*(R1.z-R2.z)*B[k](t[0])/d  +  pe*dR1.z*dB[k](t[0])*ds[1]/ds[0]);
+			
+			fval[3*k+12] = -(ds[0]*ds[1]*pg*(R2.x-R1.x)*B[k](t[1])/d  +  pe*dR2.x*dB[k](t[1])*ds[0]/ds[1]);
+			fval[3*k+13] = -(ds[0]*ds[1]*pg*(R2.y-R1.y)*B[k](t[1])/d  +  pe*dR2.y*dB[k](t[1])*ds[0]/ds[1]);
+			fval[3*k+14] = -(ds[0]*ds[1]*pg*(R2.z-R1.z)*B[k](t[1])/d  +  pe*dR2.z*dB[k](t[1])*ds[0]/ds[1]);
+		}
+	}
+	else 
+	{
+		for(int k=0;k<4;k++) {
+			fval[3*k] = 0.0;
+			fval[3*k+1] = 0.0;
+			fval[3*k+2] = 0.0;
+			
+			fval[3*k+12] = 0.0;
+			fval[3*k+13] = 0.0;
+			fval[3*k+14] = 0.0;
+		}
+	}
+
 	//printf("\n value %.15f %.15f %.15f %.15f %.15f",t[0],t[1],d,pair_energy(d),fval[0]);
 	return 0; // success
 }
